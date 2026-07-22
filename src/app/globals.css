@@ -1,0 +1,235 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * ML Knowledge Hub — The Verge design system.
+ *
+ * Dark is the primary canvas (Verge home aesthetic). A light theme is provided
+ * via the `.light` class on <html> (next-themes). All palette values are stored
+ * as space-separated RGB triplets so Tailwind can apply <alpha-value> opacity.
+ *
+ * Design principles honoured:
+ *  - Color-as-elevation: hierarchy comes from hairline borders + saturated
+ *    accent fills, not drop shadows.
+ *  - Pill radii everywhere (2/3/4/20/24/30/40px) — never square corners.
+ *  - Mono UPPERCASE labels are a signature voice (see .mono-label).
+ */
+
+@layer base {
+  :root {
+    /* Surfaces */
+    --canvas: 19 19 19; /* #131313 */
+    --surface: 45 45 45; /* #2d2d2d */
+    --surface-2: 36 36 36; /* slightly deeper than surface */
+    --frame: 49 49 49; /* #313131 */
+
+    /* Hazard accents */
+    --mint: 60 255 208; /* #3cffd0 */
+    --mint-border: 48 152 117; /* #309875 */
+    --violet: 82 0 255; /* #5200ff */
+    --violet-rule: 61 0 191; /* #3d00bf */
+
+    /* Interaction */
+    --link: 56 96 190; /* #3860be (hover) */
+    --focus: 30 174 219; /* #1eaedb (focus ring) */
+
+    /* Text */
+    --fg: 255 255 255; /* #ffffff */
+    --fg-secondary: 148 148 148; /* #949494 */
+    --fg-muted: 233 233 233; /* #e9e9e9 */
+    --fg-invert: 19 19 19; /* #131313 */
+
+    /* Semantic */
+    --success: 60 255 208;
+    --warning: 255 225 77;
+    --danger: 255 110 199;
+    --info: 47 107 255;
+
+    --ring: var(--focus);
+    --radius-pill: 20px;
+  }
+
+  .light {
+    --canvas: 244 244 243;
+    --surface: 255 255 255;
+    --surface-2: 248 248 247;
+    --frame: 222 222 220;
+
+    --mint: 0 168 132;
+    --mint-border: 13 148 136;
+    --violet: 124 58 237;
+    --violet-rule: 109 40 217;
+
+    --link: 37 99 235;
+    --focus: 14 165 233;
+
+    --fg: 23 23 23;
+    --fg-secondary: 92 92 92;
+    --fg-muted: 60 60 60;
+    --fg-invert: 255 255 255;
+
+    --success: 0 168 132;
+    --warning: 180 140 0;
+    --danger: 214 51 132;
+    --info: 37 99 235;
+  }
+
+  * {
+    border-color: rgb(var(--frame));
+  }
+
+  html {
+    color-scheme: dark;
+  }
+  html.light {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: rgb(var(--canvas));
+    color: rgb(var(--fg));
+    font-family: var(--font-sans), Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgb(var(--mint) / 0.3);
+    color: rgb(var(--fg));
+  }
+
+  /* Custom scrollbar — thin, hazard-tinted, no clutter */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--surface)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--surface));
+    border-radius: 999px;
+    border: 2px solid rgb(var(--canvas));
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--mint-border));
+  }
+}
+
+@layer components {
+  /* Signature mono-uppercase label (kickers, timestamps, tags, button text) */
+  .mono-label {
+    font-family: var(--font-mono), 'Courier New', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
+  }
+
+  /* Display shout — Archivo Black substitute for Manuka */
+  .display {
+    font-family: var(--font-display), Impact, Helvetica, sans-serif;
+    line-height: 0.95;
+    letter-spacing: 0.01em;
+  }
+
+  /* Hairline border used as elevation (Verge "color-as-elevation") */
+  .border-hairline {
+    border: 1px solid rgb(var(--fg) / 0.12);
+  }
+  .border-mint {
+    border: 1px solid rgb(var(--mint));
+  }
+  .border-violet {
+    border: 1px solid rgb(var(--violet));
+  }
+
+  /* Glassmorphism surface where appropriate */
+  .glass {
+    background: rgb(var(--surface) / 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Thin vertical timeline rail (StoryStream) */
+  .timeline-rail {
+    position: relative;
+  }
+  .timeline-rail::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 1px;
+    background: rgb(var(--violet-rule));
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .animate-fade-in {
+    animation: fade-in 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .animate-shimmer {
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* react-pdf text layer + annotation layer must sit above the canvas */
+.react-pdf__Page {
+  position: relative;
+}
+.react-pdf__Page__textContent {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 1;
+  line-height: 1;
+}
+.react-pdf__Page__textContent span {
+  color: transparent;
+}
+.react-pdf__Page__textContent ::selection {
+  background: rgb(var(--mint) / 0.4);
+}
+.react-pdf__Page__annotations {
+  position: absolute;
+  inset: 0;
+}
+.react-pdf__Page__annotations a {
+  pointer-events: none;
+}
