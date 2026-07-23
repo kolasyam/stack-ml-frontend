@@ -4,8 +4,8 @@
   "private": true,
   "description": "Mobile-first personal AI/ML learning knowledge hub — Next.js 15 frontend (The Verge design system).",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
