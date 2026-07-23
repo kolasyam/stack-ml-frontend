@@ -12,10 +12,10 @@ const nextConfig = {
       { protocol: 'https', hostname: '**' },
     ],
   },
-  eslint: {
-    // Lint is run separately in CI; don't block production builds on it.
-    ignoreDuringBuilds: true,
-  },
+  // eslint: {
+  //   // Lint is run separately in CI; don't block production builds on it.
+  //   ignoreDuringBuilds: true,
+  // },
 };
 
 export default nextConfig;
