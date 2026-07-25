@@ -138,6 +138,26 @@ export function ResourceFormDialog({
   const showLink = !isDocumentType(selectedType);
   const showUpload = isDocumentType(selectedType);
 
+  // Detect mobile devices for improved UX guidance
+  const [isMobile, setIsMobile] = React.useState(false);
+  React.useEffect(() => {
+    const checkMobile = () => {
+      const userAgent =
+        typeof window !== 'undefined'
+          ? window.navigator.userAgent || window.navigator.platform
+          : '';
+      const isMobileDevice =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          userAgent,
+        ) ||
+        window.innerWidth < 768;
+      setIsMobile(isMobileDevice);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) {
@@ -296,12 +316,19 @@ export function ResourceFormDialog({
 
           {showUpload && (
             <Field label="Upload File (PDF / DOC / DOCX)">
+              {/*
+                Mobile file input: Hidden file input triggered by button click.
+                On iOS/Android, the native file picker appears.
+                Users may need to select "Files" or "Browse" to access local device files
+                (mobile browsers often default to cloud storage options first).
+              */}
               <input
                 ref={fileInputRef}
                 type="file"
                 accept=".pdf,.doc,.docx"
                 className="hidden"
                 onChange={onFileChange}
+                data-testid="file-input"
               />
               {file ? (
                 <div className="flex items-center justify-between rounded-pill border border-mint/30 bg-mint/5 px-4 py-3">
@@ -322,19 +349,29 @@ export function ResourceFormDialog({
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex w-full flex-col items-center gap-1 rounded-feature border border-dashed border-fg/20 bg-canvas/40 px-4 py-6 text-center transition-colors hover:border-mint/40"
-                >
-                  <UploadCloud className="h-6 w-6 text-mint" />
-                  <span className="font-sans text-sm text-fg">
-                    Tap to upload a document
-                  </span>
-                  <span className="mono-label text-[10px] text-fg-secondary">
-                    PDF · DOC · DOCX
-                  </span>
-                </button>
+                <>
+                  {/* Upload button - triggers file input */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex w-full flex-col items-center gap-1 rounded-feature border border-dashed border-fg/20 bg-canvas/40 px-4 py-6 text-center transition-colors hover:border-mint/40"
+                    aria-label="Upload PDF or document file"
+                  >
+                    <UploadCloud className="h-6 w-6 text-mint" />
+                    <span className="font-sans text-sm text-fg">
+                      Tap to upload a document
+                    </span>
+                    <span className="mono-label text-[10px] text-fg-secondary">
+                      PDF · DOC · DOCX
+                    </span>
+                  </button>
+                  {/* Mobile instruction: helps users access local files */}
+                  <p className="mono-label text-xs text-fg-secondary/70 dark:text-fg-secondary/60">
+                    {isMobile
+                      ? 'On mobile: Tap "Files" or "Browse" to access local files'
+                      : 'Tap to select from your device'}
+                  </p>
+                </>
               )}
               {resource?.fileName && !file && (
                 <p className="mono-label mt-1 text-[10px] text-fg-secondary">
