@@ -30,7 +30,7 @@ export function useResourceList(query: ResourceQuery = {}, enabled = true) {
 export function useResource(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.resources.detail(id ?? ''),
-    queryFn: ({ signal }) => resourcesApi.get(id as string),
+    queryFn: ({ signal }) => resourcesApi.get(id as string, signal),
     enabled: !!id,
   });
 }
@@ -38,8 +38,10 @@ export function useResource(id: string | undefined) {
 export function useResourceFileUrl(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.resources.fileUrl(id ?? ''),
-    queryFn: ({ signal }) => resourcesApi.fileUrl(id as string),
+    queryFn: ({ signal }) => resourcesApi.fileUrl(id as string, false, signal),
     enabled: !!id,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -135,6 +137,8 @@ export function useUpdateProgress() {
     }) => resourcesApi.progress(id, { currentPage, readingProgress }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: queryKeys.resources.detail(data.id) });
+      qc.invalidateQueries({ queryKey: ['resources', 'list'] });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard });
     },
     onError: () => {
       /* silent — reader progress must never interrupt reading */

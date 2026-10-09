@@ -1,16 +1,17 @@
 # ML Knowledge Hub — Frontend
 
-Mobile-first personal AI/ML learning platform. Next.js 15 (App Router) + TypeScript
+Mobile-first personal AI/ML learning platform. Next.js 16 (App Router) + TypeScript
 + Tailwind (The Verge design system) + React Query + Radix UI + Framer-friendly
 primitives + react-pdf + mammoth.
 
 The frontend talks to the **NestJS backend** over REST. It never touches Supabase
 or MongoDB directly — all storage URLs are issued as short-lived **signed URLs**
-by the backend, so the only environment variable the client needs is the API URL.
+by the backend. Configure the API URL (and only the optional API key for a
+private single-user deployment); storage credentials stay server-side.
 
 ## Stack
 
-- **Next.js 15** (App Router, RSC where possible, client components for interactivity)
+- **Next.js 16** (App Router, RSC where possible, client components for interactivity)
 - **Tailwind CSS** — palette + radii wired to CSS variables so **dark (default) and light** both work
 - **Radix UI** — accessible Dialog / Dropdown / Select / Tabs / Tooltip / Switch / Progress
 - **TanStack Query** — caching, invalidation, optimistic updates
@@ -37,8 +38,10 @@ required on the frontend.
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | Base URL of the NestJS API (incl. `/api/v1`) |
+| `NEXT_PUBLIC_API_KEY` | Optional API key for a private single-user backend |
 | `NEXT_PUBLIC_APP_NAME` | App name (used in metadata) |
 | `NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB` | Client-side guard for uploads |
+| `NEXT_PUBLIC_MAX_READER_SIZE_MB` | Maximum DOC/DOCX size rendered in-browser |
 | `NEXT_PUBLIC_PDF_WORKER_SRC` | Path to the self-hosted pdf.js worker (`/pdf.worker.min.mjs`) |
 
 > The pdf.js worker is copied from `node_modules` into `public/` during setup.
@@ -55,7 +58,7 @@ it directly.
 | Concern | Endpoint |
 |---|---|
 | Resources | `GET/POST /resources`, `GET /resources/:id`, `GET /resources/:id/file-url`, `PATCH /resources/:id`, `PATCH /resources/:id/progress`, `PATCH /resources/:id/favorite`, `POST/DELETE /resources/:id/bookmarks/:page` |
-| Uploads | `POST /uploads` (multipart `file`) → returns `path, signedUrl, pages, …` |
+| Uploads | `POST /uploads` (multipart `file`) → returns server-derived metadata and an opaque storage path |
 | Todos | `GET/POST /todos`, `GET /todos/summary`, `PATCH /todos/:id/complete`, `/start`, `PATCH/DELETE /todos/:id` |
 | Notes | `GET/POST /notes`, `GET /notes/summary`, `PATCH/DELETE /notes/:id` |
 | Search | `GET /search?q=` (resources + todos + notes) |

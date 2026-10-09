@@ -15,12 +15,15 @@ import { ResourceTypeIcon } from '@/features/shared/type-icon';
 import { useGlobalSearch } from '@/features/search/hooks/use-search';
 import { useCreate } from './create-provider';
 import { cn } from '@/lib/utils';
+import { ApiClientError } from '@/lib/api/client';
+
+import { SearchHighlight } from '@/lib/types';
 
 type Item =
   | { kind: 'action'; label: string; icon: React.ReactNode; run: () => void }
-  | { kind: 'resource'; id: string; title: string; type: string }
-  | { kind: 'todo'; id: string; title: string }
-  | { kind: 'note'; id: string; title: string };
+  | { kind: 'resource'; id: string; title: string; type: string; highlights?: SearchHighlight[] }
+  | { kind: 'todo'; id: string; title: string; highlights?: SearchHighlight[] }
+  | { kind: 'note'; id: string; title: string; highlights?: SearchHighlight[] };
 
 /**
  * Global command palette (⌘K) — instant search across resources / todos /
@@ -39,7 +42,7 @@ export function CommandPalette({
   const [active, setActive] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const { data } = useGlobalSearch(query, open);
+  const { data, isError, error } = useGlobalSearch(query, open);
 
   const items = React.useMemo<Item[]>(() => {
     const actions: Item[] = [
@@ -50,26 +53,32 @@ export function CommandPalette({
     if (!query.trim()) return actions;
     const results: Item[] = [];
     for (const r of data?.resources ?? []) {
-      results.push({ kind: 'resource', id: r.id, title: r.title, type: r.type });
+      results.push({ kind: 'resource', id: r.id, title: r.title, type: r.type, highlights: r.highlights });
     }
     for (const t of data?.todos ?? []) {
-      results.push({ kind: 'todo', id: t.id, title: t.title });
+      results.push({ kind: 'todo', id: t.id, title: t.title, highlights: t.highlights });
     }
     for (const n of data?.notes ?? []) {
-      results.push({ kind: 'note', id: n.id, title: n.taskName });
+      results.push({ kind: 'note', id: n.id, title: n.taskName, highlights: n.highlights });
     }
     return [...actions, ...results];
   }, [query, data, openCreate]);
 
   React.useEffect(() => {
     if (open) {
-      setQuery('');
-      setActive(0);
-      setTimeout(() => inputRef.current?.focus(), 20);
+      const timer = window.setTimeout(() => {
+        setQuery('');
+        setActive(0);
+        inputRef.current?.focus();
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
   }, [open]);
 
-  React.useEffect(() => setActive(0), [query]);
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setActive(0), 0);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   const go = (item: Item) => {
     onOpenChange(false);
@@ -120,7 +129,12 @@ export function CommandPalette({
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto p-2">
-            {query.trim() && items.length <= 3 && (
+            {query.trim() && isError && (
+              <p className="px-3 py-6 text-center font-sans text-sm text-danger">
+                {error instanceof ApiClientError ? error.message : 'Search failed. Try again.'}
+              </p>
+            )}
+            {query.trim() && !isError && items.length <= 3 && (
               <p className="px-3 py-6 text-center font-sans text-sm text-fg-secondary">
                 No matches for “{query}”.
               </p>
@@ -147,31 +161,33 @@ export function CommandPalette({
                         {item.label}
                       </span>
                     </>
-                  ) : item.kind === 'resource' ? (
-                    <>
-                      <ResourceTypeIcon
-                        type={item.type as never}
-                        className="h-4 w-4"
-                      />
-                      <span className="min-w-0 flex-1 truncate font-sans text-sm text-fg">
-                        {item.title}
-                      </span>
-                      <span className="mono-label text-[10px] text-fg-secondary">
-                        Resource
-                      </span>
-                    </>
                   ) : (
                     <>
-                      {item.kind === 'todo' ? (
-                        <CheckSquare className="h-4 w-4 text-mint" />
-                      ) : (
-                        <StickyNote className="h-4 w-4 text-mint" />
-                      )}
-                      <span className="min-w-0 flex-1 truncate font-sans text-sm text-fg">
-                        {item.title}
-                      </span>
-                      <span className="mono-label text-[10px] text-fg-secondary">
-                        {item.kind === 'todo' ? 'Todo' : 'Note'}
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-mint/10">
+                        {item.kind === 'resource' ? (
+                          <ResourceTypeIcon type={item.type as never} className="h-4 w-4" />
+                        ) : item.kind === 'todo' ? (
+                          <CheckSquare className="h-4 w-4 text-mint" />
+                        ) : (
+                          <StickyNote className="h-4 w-4 text-mint" />
+                        )}
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-col justify-center">
+                        <span className="truncate font-sans text-sm text-fg">
+                          {item.title}
+                        </span>
+                        {item.kind !== 'action' && item.highlights?.[0]?.texts && (
+                          <span className="truncate font-sans text-xs text-fg-secondary">
+                            {item.highlights[0].texts.map((t, idx) => (
+                              <span key={idx} className={t.type === 'hit' ? 'bg-mint/20 text-mint' : ''}>
+                                {t.value}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                      </div>
+                      <span className="shrink-0 mono-label text-[10px] text-fg-secondary">
+                        {item.kind === 'resource' ? 'Resource' : item.kind === 'todo' ? 'Todo' : 'Note'}
                       </span>
                     </>
                   )}

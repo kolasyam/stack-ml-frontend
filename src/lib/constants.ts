@@ -16,6 +16,7 @@ export const RESOURCE_TYPES: ResourceType[] = [
   'YouTube',
   'Instagram',
   'LinkedIn',
+  'Substack',
   'Website',
   'Research Paper',
   'DOC',

@@ -12,10 +12,53 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { sanitizeDocumentHtml } from '@/lib/safe-content';
 
 interface Props {
   url: string;
   onProgress: (progress: number) => void;
+}
+
+const MAX_READER_BYTES =
+  Number(process.env.NEXT_PUBLIC_MAX_READER_SIZE_MB ?? 50) * 1024 * 1024;
+
+async function readBoundedArrayBuffer(response: Response): Promise<ArrayBuffer> {
+  const declared = Number(response.headers.get('content-length') ?? 0);
+  if (declared > MAX_READER_BYTES) {
+    throw new Error('This document is too large to render in the browser. Download it instead.');
+  }
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > MAX_READER_BYTES) {
+      throw new Error('This document is too large to render in the browser. Download it instead.');
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_READER_BYTES) {
+        await reader.cancel();
+        throw new Error('This document is too large to render in the browser. Download it instead.');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result.buffer;
 }
 
 /**
@@ -34,15 +77,16 @@ export function DocReader({ url, onProgress }: Props) {
 
   React.useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     (async () => {
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error('Failed to fetch document');
-        const buf = await res.arrayBuffer();
+        const buf = await readBoundedArrayBuffer(res);
         const result = await mammoth.convertToHtml({ arrayBuffer: buf });
-        if (!cancelled) setHtml(result.value);
+        if (!cancelled) setHtml(sanitizeDocumentHtml(result.value));
       } catch (err) {
-        if (!cancelled)
+        if (!cancelled && !(err instanceof DOMException && err.name === 'AbortError'))
           setError(
             err instanceof Error ? err.message : 'Could not render document',
           );
@@ -50,6 +94,7 @@ export function DocReader({ url, onProgress }: Props) {
     })();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [url]);
 

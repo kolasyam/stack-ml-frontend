@@ -39,9 +39,9 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-6">
       {/* Greeting + quick actions */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="mono-label text-[10px] text-mint">PERSONAL LEARNING</p>
-          <h2 className="font-sans text-xl font-semibold text-fg">
+        <div className="min-w-0">
+          <p className="mono-label truncate text-[10px] text-mint">PERSONAL LEARNING</p>
+          <h2 className="truncate font-sans text-xl font-semibold text-fg">
             Your AI/ML command center
           </h2>
         </div>
@@ -248,12 +248,12 @@ function QuickAction({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 rounded-pill border border-fg/10 bg-canvas/40 px-4 py-3 text-left transition-colors hover:border-mint/40"
+      className="flex min-w-0 items-center gap-3 rounded-pill border border-fg/10 bg-canvas/40 px-4 py-3 text-left transition-colors hover:border-mint/40"
     >
-      <span className="flex h-8 w-8 items-center justify-center rounded-feature bg-mint/10">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-feature bg-mint/10">
         {icon}
       </span>
-      <span className="font-sans text-sm text-fg">{label}</span>
+      <span className="truncate font-sans text-sm text-fg">{label}</span>
     </button>
   );
 }
@@ -291,9 +291,9 @@ function RecentColumn({
             <Link
               key={it.id}
               href={it.to ?? `${href}/${it.id}`}
-              className="flex items-center gap-3 rounded-pill px-2 py-2 transition-colors hover:bg-fg/5"
+              className="flex min-w-0 items-center gap-3 rounded-pill px-2 py-2 transition-colors hover:bg-fg/5"
             >
-              <span className="text-fg-secondary">{it.icon}</span>
+              <span className="shrink-0 text-fg-secondary">{it.icon}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-sans text-sm text-fg">{it.primary}</span>
                 <span className="block truncate font-sans text-[11px] text-fg-secondary">{it.secondary}</span>

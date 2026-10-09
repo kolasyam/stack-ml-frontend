@@ -1,11 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Loader2, UploadCloud, X } from 'lucide-react';
+import { Loader2, UploadCloud, X, Plus, Trash } from 'lucide-react';
 
 import {
   Dialog,
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { DescriptionImprover } from '@/components/common/DescriptionImprover';
 import { Switch } from '@/components/ui/switch';
 import { TagInput } from '@/components/ui/tag-input';
@@ -45,20 +46,27 @@ import type {
 import type { Resource } from '@/lib/types';
 
 const schema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().optional(),
+  title: z.string().min(1, 'Title is required').max(300),
+  description: z.string().max(10000).optional(),
   type: z.enum(RESOURCE_TYPES as [string, ...string[]]),
-  link: z
-    .string()
-    .url('Enter a valid URL')
-    .optional()
-    .or(z.literal('')),
+  link: z.string().optional(),
+  links: z
+    .array(
+      z.object({
+        value: z
+          .string()
+          .url('Enter a valid URL')
+          .refine((v) => !v || /^https?:\/\//i.test(v), 'Use an HTTP(S) URL')
+          .or(z.literal('')),
+      })
+    )
+    .optional(),
   difficulty: z.enum(RESOURCE_DIFFICULTIES as [string, ...string[]]).optional(),
   priority: z.enum(RESOURCE_PRIORITIES as [string, ...string[]]).optional(),
   estimatedReadingTime: z.coerce.number().min(0).optional(),
   status: z.enum(RESOURCE_STATUSES as [string, ...string[]]).optional(),
   favorite: z.boolean().optional(),
-  tags: z.array(z.string()).optional(),
+  tags: z.array(z.string().max(100)).max(50).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -80,7 +88,9 @@ export function ResourceFormDialog({
   const isEdit = !!resource;
   const [file, setFile] = React.useState<File | null>(null);
   const [uploading, setUploading] = React.useState(false);
+  const [uploadProgress, setUploadProgress] = React.useState(0);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const uploadAbortRef = React.useRef<AbortController | null>(null);
 
   const create = useCreateResource();
   const update = useUpdateResource();
@@ -92,6 +102,7 @@ export function ResourceFormDialog({
       description: '',
       type: 'Website',
       link: '',
+      links: [{ value: '' }],
       difficulty: undefined,
       priority: 'Medium',
       estimatedReadingTime: undefined,
@@ -105,12 +116,18 @@ export function ResourceFormDialog({
   React.useEffect(() => {
     if (!open) return;
     setFile(null);
+    setUploadProgress(0);
     if (resource) {
       form.reset({
         title: resource.title,
         description: resource.description ?? '',
         type: resource.type,
         link: resource.link ?? '',
+        links: resource.links?.length
+          ? resource.links.map((l) => ({ value: l }))
+          : resource.link
+          ? [{ value: resource.link }]
+          : [{ value: '' }],
         difficulty: resource.difficulty,
         priority: resource.priority ?? 'Medium',
         estimatedReadingTime: resource.estimatedReadingTime,
@@ -124,6 +141,7 @@ export function ResourceFormDialog({
         description: '',
         type: 'Website',
         link: '',
+        links: [{ value: '' }],
         difficulty: undefined,
         priority: 'Medium',
         estimatedReadingTime: undefined,
@@ -133,6 +151,16 @@ export function ResourceFormDialog({
       });
     }
   }, [open, resource, form]);
+
+  React.useEffect(() => {
+    if (!open) uploadAbortRef.current?.abort();
+    return () => uploadAbortRef.current?.abort();
+  }, [open]);
+
+  const { fields: linkFields, append: appendLink, remove: removeLink } = useFieldArray({
+    control: form.control,
+    name: 'links',
+  });
 
   const selectedType = form.watch('type') as Parameters<typeof isDocumentType>[0];
   const showLink = !isDocumentType(selectedType);
@@ -161,6 +189,16 @@ export function ResourceFormDialog({
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) {
+      const maxMb = Number(
+        process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB ??
+          process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB ??
+          100,
+      );
+      if (f.size > maxMb * 1024 * 1024) {
+        toast.error(`Upload Failed — file must be smaller than ${maxMb}MB`);
+        e.target.value = '';
+        return;
+      }
       const ok = DOCUMENT_TYPES.some((t) =>
         f.name.toLowerCase().endsWith(`.${t.toLowerCase()}`),
       );
@@ -173,56 +211,87 @@ export function ResourceFormDialog({
   };
 
   const onSubmit = async (values: FormValues) => {
-    let fileMeta: Record<string, unknown> = {};
+    let uploadedPath: string | undefined;
 
     if (showUpload && file) {
       setUploading(true);
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
       try {
-        const res = await uploadsApi.upload(file);
-        fileMeta = {
-          fileUrl: res.signedUrl,
-          filePath: res.path,
-          fileName: res.fileName,
-          fileSize: res.fileSize,
-          fileType: res.fileType,
-          pages: res.pages,
-          extractedText: res.extractedText,
-        };
+        const res = await uploadsApi.upload(file, {
+          signal: controller.signal,
+          onProgress: setUploadProgress,
+        });
+        uploadedPath = res.path;
         toast.success('File Uploaded');
+        if (res.extractionStatus === 'skipped') {
+          toast.info('Large file stored; text indexing will be unavailable until processing is added.');
+        } else if (res.extractionStatus === 'failed') {
+          toast.warning('File stored, but text extraction failed.');
+        }
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          setUploading(false);
+          setUploadProgress(0);
+          return;
+        }
         setUploading(false);
+        setUploadProgress(0);
         toast.error(err instanceof Error ? err.message : 'Upload Failed');
         return;
       }
+      uploadAbortRef.current = null;
       setUploading(false);
+      setUploadProgress(100);
     }
 
     const payload = {
       title: values.title,
       description: values.description || undefined,
       type: values.type,
-      link: showLink ? values.link || undefined : undefined,
+      link: showLink && values.links?.[0]?.value ? values.links[0].value : undefined,
+      links: showLink ? values.links?.map((l) => l.value).filter(Boolean) : [],
       tags: values.tags ?? [],
       difficulty: values.difficulty || undefined,
       priority: values.priority || undefined,
       estimatedReadingTime: values.estimatedReadingTime || undefined,
       status: values.status || undefined,
       favorite: values.favorite || undefined,
-      ...(file ? fileMeta : {}),
+      ...(showUpload && uploadedPath ? { filePath: uploadedPath } : {}),
     };
 
     if (isEdit && resource) {
-      update.mutate(
-        { id: resource.id, input: payload as unknown as UpdateResourceInput },
-        { onSuccess: () => onOpenChange(false) },
-      );
+      try {
+        await update.mutateAsync({
+          id: resource.id,
+          input: payload as unknown as UpdateResourceInput,
+        });
+        onOpenChange(false);
+      } catch {
+        if (uploadedPath) {
+          try {
+            await uploadsApi.remove(uploadedPath);
+          } catch {
+            toast.warning('The uploaded file could not be cleaned up automatically.');
+          }
+        }
+      }
     } else {
-      create.mutate(payload as unknown as CreateResourceInput, {
-        onSuccess: (created) => {
-          onOpenChange(false);
-          onCreated?.(created);
-        },
-      });
+      try {
+        const created = await create.mutateAsync(
+          payload as unknown as CreateResourceInput,
+        );
+        onOpenChange(false);
+        onCreated?.(created);
+      } catch {
+        if (uploadedPath) {
+          try {
+            await uploadsApi.remove(uploadedPath);
+          } catch {
+            toast.warning('The uploaded file could not be cleaned up automatically.');
+          }
+        }
+      }
     }
   };
 
@@ -271,7 +340,13 @@ export function ResourceFormDialog({
             <Field label="Type">
               <Select
                 value={form.watch('type')}
-                onValueChange={(v) => form.setValue('type', v)}
+                onValueChange={(v) => {
+                  form.setValue('type', v);
+                  if (!isDocumentType(v as Parameters<typeof isDocumentType>[0])) {
+                    setFile(null);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -306,11 +381,48 @@ export function ResourceFormDialog({
           </div>
 
           {showLink && (
-            <Field label="Link" error={form.formState.errors.link?.message}>
-              <Input
-                placeholder="https://…"
-                {...form.register('link')}
-              />
+            <Field label="Links">
+              <div className="flex flex-col gap-2">
+                {linkFields.map((field, index) => (
+                  <div key={field.id} className="flex items-center gap-2">
+                    <Input
+                      placeholder="https://…"
+                      {...form.register(`links.${index}.value` as const)}
+                    />
+                    {linkFields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => removeLink(index)}
+                        className="text-fg-secondary hover:text-danger"
+                      >
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {form.formState.errors.links?.root?.message && (
+                  <p className="font-sans text-xs text-danger">
+                    {form.formState.errors.links.root.message}
+                  </p>
+                )}
+                {/* Find the first field with an error and display it */}
+                {form.formState.errors.links && Array.isArray(form.formState.errors.links) && (
+                  <p className="font-sans text-xs text-danger">
+                    {form.formState.errors.links.find(e => e?.value?.message)?.value?.message}
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => appendLink({ value: '' })}
+                  className="w-fit mt-1 self-start"
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Add Link
+                </Button>
+              </div>
             </Field>
           )}
 
@@ -325,7 +437,7 @@ export function ResourceFormDialog({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.doc,.docx"
+                accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.doc,.docx"
                 className="hidden"
                 onChange={onFileChange}
                 data-testid="file-input"
@@ -377,6 +489,14 @@ export function ResourceFormDialog({
                 <p className="mono-label mt-1 text-[10px] text-fg-secondary">
                   Current: {resource.fileName}
                 </p>
+              )}
+              {uploading && (
+                <div className="mt-2 flex items-center gap-2">
+                  <Progress value={uploadProgress} className="flex-1" />
+                  <span className="mono-label text-[10px] text-fg-secondary">
+                    {uploadProgress}%
+                  </span>
+                </div>
               )}
             </Field>
           )}
@@ -432,7 +552,7 @@ export function ResourceFormDialog({
             </Field>
             <Field label="Tags">
               <TagInput
-                value={form.watch('tags') ?? []}
+              value={form.watch('tags') ?? []}
                 onChange={(tags) => form.setValue('tags', tags)}
               />
             </Field>
@@ -450,9 +570,12 @@ export function ResourceFormDialog({
             <Button
               type="button"
               variant="ghost"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                if (uploading) uploadAbortRef.current?.abort();
+                else onOpenChange(false);
+              }}
             >
-              Cancel
+              {uploading ? 'Cancel Upload' : 'Cancel'}
             </Button>
             <Button type="submit" disabled={pending}>
               {pending && <Loader2 className="h-4 w-4 animate-spin" />}

@@ -2,12 +2,12 @@
   "name": "ml-knowledge-hub-frontend",
   "version": "1.0.0",
   "private": true,
-  "description": "Mobile-first personal AI/ML learning knowledge hub — Next.js 15 frontend (The Verge design system).",
+  "description": "Mobile-first personal AI/ML learning knowledge hub — Next.js 16 frontend (The Verge design system).",
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -41,8 +41,8 @@ import type {
 import type { Resource, Todo } from '@/lib/types';
 
 const schema = z.object({
-  title: z.string().min(1, 'Todo title is required'),
-  description: z.string().optional(),
+  title: z.string().min(1, 'Todo title is required').max(200),
+  description: z.string().max(10000).optional(),
   resourceId: z.string().min(1, 'Linked resource is required'),
   status: z.enum(TODO_STATUSES as [string, ...string[]]).optional(),
   priority: z.enum(RESOURCE_PRIORITIES as [string, ...string[]]).optional(),

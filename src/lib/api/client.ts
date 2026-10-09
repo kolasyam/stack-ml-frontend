@@ -19,6 +19,7 @@ export class ApiClientError extends Error {
   error: string;
   details?: string[];
   path: string;
+  requestId?: string;
   constructor(payload: ApiError) {
     const message = Array.isArray(payload.message)
       ? payload.message.join('. ')
@@ -28,6 +29,7 @@ export class ApiClientError extends Error {
     this.statusCode = payload.statusCode;
     this.error = payload.error;
     this.path = payload.path;
+    this.requestId = payload.requestId;
     this.details = Array.isArray(payload.message) ? payload.message : undefined;
   }
 }
@@ -42,11 +44,23 @@ interface RequestOptions {
   query?: string;
 }
 
+export interface UploadOptions {
+  signal?: AbortSignal;
+  onProgress?: (percentage: number) => void;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, rawBody, signal, query } = options;
   const url = `${BASE_URL}${path}${query ?? ''}`;
 
   const headers: Record<string, string> = {};
+  // A browser-generated id lets the same request be traced across frontend
+  // logs, the API, and any downstream service logs.
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    headers['X-Request-Id'] = crypto.randomUUID();
+  }
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+  if (apiKey) headers['X-Api-Key'] = apiKey;
   let payload: BodyInit | undefined;
   if (rawBody && body instanceof FormData) {
     payload = body;
@@ -59,6 +73,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   try {
     res = await fetch(url, { method, headers, body: payload, signal });
   } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
     // Network failure — no backend / CORS / offline.
     throw new ApiClientError({
       success: false,
@@ -103,6 +118,116 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return envelope.data;
 }
 
+/**
+ * XMLHttpRequest is used for multipart uploads because fetch does not expose
+ * browser upload progress. It preserves the same response envelope and abort
+ * semantics as the fetch-based client.
+ */
+function uploadRequest<T>(
+  path: string,
+  form: FormData,
+  options: UploadOptions = {},
+): Promise<T> {
+  if (typeof XMLHttpRequest === 'undefined') {
+    return request<T>(path, {
+      method: 'POST',
+      body: form,
+      rawBody: true,
+      signal: options.signal,
+    });
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const url = `${BASE_URL}${path}`;
+    let settled = false;
+
+    const cleanup = () => {
+      options.signal?.removeEventListener('abort', onAbort);
+    };
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback();
+    };
+    const onAbort = () => {
+      xhr.abort();
+    };
+
+    xhr.open('POST', url);
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      xhr.setRequestHeader('X-Request-Id', crypto.randomUUID());
+    }
+    const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+    if (apiKey) xhr.setRequestHeader('X-Api-Key', apiKey);
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) {
+        options.onProgress?.(Math.round((event.loaded / event.total) * 100));
+      }
+    });
+    xhr.onload = () => {
+      if (xhr.status === 204) {
+        finish(() => resolve(undefined as T));
+        return;
+      }
+
+      let json: unknown;
+      try {
+        json = xhr.responseText ? JSON.parse(xhr.responseText) : undefined;
+      } catch {
+        finish(() =>
+          reject(
+            new ApiClientError({
+              success: false,
+              statusCode: xhr.status,
+              path,
+              method: 'POST',
+              timestamp: new Date().toISOString(),
+              error: 'ParseError',
+              message: xhr.statusText || 'Failed to parse server response',
+            }),
+          ),
+        );
+        return;
+      }
+
+      if (xhr.status < 200 || xhr.status >= 300) {
+        finish(() => reject(new ApiClientError(json as ApiError)));
+        return;
+      }
+
+      const envelope = json as { data: T };
+      options.onProgress?.(100);
+      finish(() => resolve(envelope.data));
+    };
+    xhr.onerror = () =>
+      finish(() =>
+        reject(
+          new ApiClientError({
+            success: false,
+            statusCode: 0,
+            path,
+            method: 'POST',
+            timestamp: new Date().toISOString(),
+            error: 'NetworkError',
+            message: 'Could not reach the server. Is the backend running?',
+          }),
+        ),
+      );
+    xhr.onabort = () =>
+      finish(() => reject(new DOMException('The operation was aborted.', 'AbortError')));
+
+    if (options.signal?.aborted) {
+      xhr.abort();
+      return;
+    }
+    options.signal?.addEventListener('abort', onAbort, { once: true });
+    xhr.send(form);
+  });
+}
+
 export const api = {
   get: <T>(path: string, query?: string, signal?: AbortSignal) =>
     request<T>(path, { method: 'GET', query, signal }),
@@ -114,9 +239,9 @@ export const api = {
     request<T>(path, { method: 'PUT', body }),
   delete: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'DELETE', body }),
-  /** Upload multipart/form-data (field name handled by caller). */
-  upload: <T>(path: string, form: FormData) =>
-    request<T>(path, { method: 'POST', body: form, rawBody: true }),
+  /** Upload multipart/form-data with cancellation and progress reporting. */
+  upload: <T>(path: string, form: FormData, options?: UploadOptions) =>
+    uploadRequest<T>(path, form, options),
 };
 
 export { BASE_URL };

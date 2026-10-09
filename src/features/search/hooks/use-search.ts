@@ -1,25 +1,26 @@
 'use client';
 
+import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { searchApi, statsApi } from '@/lib/api/search';
 import { queryKeys } from '@/lib/query-keys';
-import { debounce } from '@/lib/utils';
-
 /** Debounced global search across resources / todos / notes. */
 export function useGlobalSearch(query: string, enabled = true) {
+  const [debouncedQuery, setDebouncedQuery] = React.useState(query);
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
   return useQuery({
-    queryKey: queryKeys.search(query),
-    queryFn: ({ signal }) => searchApi.global(query, 8),
-    enabled: enabled && query.trim().length > 0,
+    queryKey: queryKeys.search(debouncedQuery),
+    queryFn: ({ signal }) => searchApi.global(debouncedQuery, 8, signal),
+    enabled: enabled && debouncedQuery.trim().length > 0,
     staleTime: 10_000,
     placeholderData: (prev) => prev,
   });
 }
-
-export const debouncedSearch = debounce(
-  (cb: (q: string) => void, value: string) => cb(value),
-  250,
-);
 
 export function useDashboard() {
   return useQuery({

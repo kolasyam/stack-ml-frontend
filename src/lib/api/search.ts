@@ -3,10 +3,11 @@ import { buildQuery } from '../utils';
 import type { DashboardData, SearchResult } from '../types';
 
 export const searchApi = {
-  global: (q: string, limit = 8) =>
+  global: (q: string, limit = 8, signal?: AbortSignal) =>
     api.get<SearchResult>(
       '/search',
       buildQuery({ q, limit: limit.toString() }),
+      signal,
     ),
 };
 

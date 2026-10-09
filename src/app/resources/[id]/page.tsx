@@ -46,7 +46,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { uploadsApi } from '@/lib/api/resources';
+import { resourcesApi } from '@/lib/api/resources';
 import {
   PRIORITY_DOT,
   RESOURCE_STATUS_STYLES,
@@ -71,7 +71,7 @@ export default function ResourceDetailPage() {
     if (!resource?.filePath) return;
     setDownloading(true);
     try {
-      const { url } = await uploadsApi.signedUrl(resource.filePath, true);
+      const { url } = await resourcesApi.fileUrl(resource.id, true);
       await downloadFile(url, resource.fileName ?? 'download');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Download failed');
@@ -155,7 +155,7 @@ export default function ResourceDetailPage() {
             </span>
             <div className="min-w-0">
               <p className="mono-label text-[10px] text-mint">{resource.type}</p>
-              <h1 className="mt-0.5 font-sans text-base font-semibold leading-snug text-fg">
+              <h1 className="mt-0.5 break-words font-sans text-base font-semibold leading-snug text-fg">
                 {resource.title}
               </h1>
             </div>
@@ -174,7 +174,7 @@ export default function ResourceDetailPage() {
           </div>
 
           {resource.description && (
-            <p className="mt-4 font-sans text-sm text-fg-secondary">
+            <p className="mt-4 whitespace-pre-wrap break-words font-sans text-sm text-fg-secondary">
               {resource.description}
             </p>
           )}
@@ -188,13 +188,21 @@ export default function ResourceDetailPage() {
                 </Link>
               </Button>
             )}
-            {resource.link && !doc && (
+            {!doc && resource.links && resource.links.length > 0 ? (
+              resource.links.map((link, idx) => (
+                <Button key={idx} asChild variant={idx === 0 ? "primary" : "secondary"} size="sm">
+                  <a href={link} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4" /> {resource.links!.length > 1 ? `Link ${idx + 1}` : 'Open'}
+                  </a>
+                </Button>
+              ))
+            ) : !doc && resource.link ? (
               <Button asChild variant="primary" size="sm">
                 <a href={resource.link} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-4 w-4" /> Open
                 </a>
               </Button>
-            )}
+            ) : null}
             {resource.filePath && (
               <Button variant="secondary" size="sm" onClick={onDownload} disabled={downloading}>
                 <Download className="h-4 w-4" /> Download

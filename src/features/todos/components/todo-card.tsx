@@ -93,7 +93,7 @@ export function TodoCard({ todo }: { todo: Todo }) {
                 <MoreVertical className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem onSelect={openResource}>
                 <ExternalLink className="h-4 w-4" /> Open Resource

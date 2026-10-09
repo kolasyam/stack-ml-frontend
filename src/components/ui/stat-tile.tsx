@@ -14,13 +14,13 @@ export function StatTile({ icon, label, value, accent, className }: StatTileProp
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 rounded-card border border-fg/10 bg-surface/60 p-4',
+        'flex min-w-0 flex-col gap-2 rounded-card border border-fg/10 bg-surface/60 p-4',
         className,
       )}
     >
-      <div className="flex items-center justify-between">
-        <span className="mono-label text-[10px] text-fg-secondary">{label}</span>
-        <span className={cn('flex h-7 w-7 items-center justify-center rounded-feature', accent ?? 'bg-mint/10 text-mint')}>
+      <div className="flex min-w-0 items-center justify-between gap-1">
+        <span className="mono-label truncate text-[10px] text-fg-secondary">{label}</span>
+        <span className={cn('flex shrink-0 h-7 w-7 items-center justify-center rounded-feature', accent ?? 'bg-mint/10 text-mint')}>
           {icon}
         </span>
       </div>

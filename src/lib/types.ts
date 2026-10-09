@@ -12,6 +12,7 @@ export type ResourceType =
   | 'YouTube'
   | 'Instagram'
   | 'LinkedIn'
+  | 'Substack'
   | 'Website'
   | 'Research Paper'
   | 'DOC'
@@ -73,7 +74,7 @@ export interface Resource {
   description?: string;
   type: ResourceType;
   link?: string;
-  fileUrl?: string;
+  links?: string[];
   filePath?: string;
   fileName?: string;
   fileSize?: number;
@@ -101,7 +102,6 @@ export interface ResourceSnapshot {
   type: ResourceType;
   status?: ResourceStatus;
   filePath?: string;
-  fileUrl?: string;
   currentPage?: number;
 }
 
@@ -148,9 +148,9 @@ export interface UploadResult {
   fileSize: number;
   fileType: string;
   mimeType: string;
-  signedUrl: string;
   pages?: number;
   extractedText?: string;
+  extractionStatus: 'completed' | 'skipped' | 'failed' | 'not-applicable';
 }
 
 export interface ResourceStats {
@@ -193,11 +193,16 @@ export interface DashboardData {
   recentNotes: Note[];
 }
 
+export interface SearchHighlight {
+  path: string;
+  texts: { value: string; type: 'hit' | 'text' }[];
+}
+
 export interface SearchResult {
   query: string;
-  resources: Resource[];
-  todos: Todo[];
-  notes: Note[];
+  resources: (Resource & { highlights?: SearchHighlight[] })[];
+  todos: (Todo & { highlights?: SearchHighlight[] })[];
+  notes: (Note & { highlights?: SearchHighlight[] })[];
   counts: { resources: number; todos: number; notes: number };
 }
 
@@ -207,6 +212,7 @@ export interface ApiError {
   path: string;
   method: string;
   timestamp: string;
+  requestId?: string;
   error: string;
   message: string | string[];
 }
@@ -218,4 +224,5 @@ export interface ApiResponse<T> {
   message?: string;
   timestamp: string;
   path: string;
+  requestId?: string;
 }

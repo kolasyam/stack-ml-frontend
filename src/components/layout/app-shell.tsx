@@ -28,7 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <CreateProvider>
-      <div className="flex min-h-screen bg-canvas">
+      <div className="flex min-h-screen w-full overflow-x-hidden bg-canvas">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <TopBar onOpenSearch={() => setCmdOpen(true)} />

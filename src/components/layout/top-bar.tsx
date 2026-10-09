@@ -25,10 +25,10 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
 
       <button
         onClick={onOpenSearch}
-        className="flex h-10 items-center gap-2 rounded-pill border border-fg/15 bg-canvas/60 px-3 text-fg-secondary transition-colors hover:border-fg/25 sm:w-64 sm:px-4"
+        className="flex min-w-0 h-10 shrink items-center gap-2 rounded-pill border border-fg/15 bg-canvas/60 px-3 text-fg-secondary transition-colors hover:border-fg/25 sm:w-64 sm:px-4"
       >
-        <Search className="h-4 w-4" />
-        <span className="font-sans text-sm">Search…</span>
+        <Search className="h-4 w-4 shrink-0" />
+        <span className="truncate font-sans text-sm">Search…</span>
         <kbd className="mono-label ml-auto hidden text-[10px] sm:inline">
           ⌘K
         </kbd>

@@ -32,7 +32,7 @@ import {
   PRIORITY_DOT,
 } from '@/lib/constants';
 import { ResourceTypeIcon } from '@/features/shared/type-icon';
-import { uploadsApi } from '@/lib/api/resources';
+import { resourcesApi, uploadsApi } from '@/lib/api/resources';
 import { formatBytes, formatShortDate, cn, shareLink, downloadFile } from '@/lib/utils';
 import {
   useDeleteResource,
@@ -41,6 +41,7 @@ import {
 import { useCreate } from '@/components/layout/create-provider';
 import { isDocumentType } from '@/lib/constants';
 import type { Resource } from '@/lib/types';
+import { safeExternalUrl } from '@/lib/safe-content';
 
 export function ResourceCard({ resource }: { resource: Resource }) {
   const router = useRouter();
@@ -56,8 +57,11 @@ export function ResourceCard({ resource }: { resource: Resource }) {
 
   const onOpen = (e: Event) => {
     e.stopPropagation();
+    const targetLink = resource.links?.[0] ?? resource.link;
     if (doc) go();
-    else if (resource.link) window.open(resource.link, '_blank');
+    else if (safeExternalUrl(targetLink)) {
+      window.open(safeExternalUrl(targetLink) ?? '', '_blank', 'noopener,noreferrer');
+    }
     else go();
   };
 
@@ -69,7 +73,7 @@ export function ResourceCard({ resource }: { resource: Resource }) {
     }
     setDownloading(true);
     try {
-      const { url } = await uploadsApi.signedUrl(resource.filePath, true);
+      const { url } = await resourcesApi.fileUrl(resource.id, true);
       await downloadFile(url, resource.fileName ?? 'download');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Download failed');
@@ -80,8 +84,9 @@ export function ResourceCard({ resource }: { resource: Resource }) {
 
   const onShare = async (e: Event) => {
     e.stopPropagation();
+    const targetLink = resource.links?.[0] ?? resource.link;
     const url =
-      resource.link ?? `${window.location.origin}/resources/${resource.id}`;
+      targetLink ?? `${window.location.origin}/resources/${resource.id}`;
     const res = await shareLink(resource.title, url);
     if (res === 'copied') toast.success('Link copied to clipboard');
     else if (res === 'failed') toast.error('Could not share this resource');
@@ -92,7 +97,19 @@ export function ResourceCard({ resource }: { resource: Resource }) {
       <Card
         interactive
         onClick={go}
-        className="group flex cursor-pointer flex-col gap-3 p-4"
+        onKeyDown={(e) => {
+          // Keep keyboard activation of the nested favorite/actions controls
+          // from also activating the card itself.
+          if (e.target !== e.currentTarget) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            go();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${resource.title}`}
+        className="group flex cursor-pointer flex-col gap-3 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focusring"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -131,7 +148,7 @@ export function ResourceCard({ resource }: { resource: Resource }) {
                   <MoreVertical className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
                 <DropdownMenuItem onSelect={onOpen}>
                   {doc ? (
@@ -175,11 +192,11 @@ export function ResourceCard({ resource }: { resource: Resource }) {
         </div>
 
         <div className="min-w-0">
-          <h3 className="line-clamp-2 font-sans text-[15px] font-semibold leading-snug text-fg">
+          <h3 className="line-clamp-2 break-words font-sans text-[15px] font-semibold leading-snug text-fg">
             {resource.title}
           </h3>
           {resource.description && (
-            <p className="mt-1 line-clamp-2 font-sans text-xs text-fg-secondary">
+            <p className="mt-1 line-clamp-2 break-words font-sans text-xs text-fg-secondary">
               {resource.description}
             </p>
           )}

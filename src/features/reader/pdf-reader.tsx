@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import {
@@ -27,9 +28,10 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import type { Bookmark, Highlight, HighlightRect } from '@/lib/types';
-import type {
-  CreateHighlightInput,
-  UpdateHighlightInput,
+import {
+  resourcesApi,
+  type CreateHighlightInput,
+  type UpdateHighlightInput,
 } from '@/lib/api/resources';
 
 // Self-hosted pdf.js worker (copied to /public at build time).
@@ -46,6 +48,7 @@ const HIGHLIGHT_COLORS = [
 ];
 
 interface Props {
+  resourceId: string;
   url: string;
   initialPage: number;
   bookmarks: Bookmark[];
@@ -64,6 +67,7 @@ const ZOOM_MAX = 3;
 const RENDER_WINDOW = 2;
 
 export function PdfReader({
+  resourceId,
   url,
   initialPage,
   bookmarks,
@@ -91,6 +95,8 @@ export function PdfReader({
   const [matchPages, setMatchPages] = React.useState<number[]>([]);
   const [matchIdx, setMatchIdx] = React.useState(0);
   const [searching, setSearching] = React.useState(false);
+  const pdfRef = React.useRef<PDFDocumentProxy | null>(null);
+  const searchRunRef = React.useRef(0);
 
   // Bookmark + highlight panels
   const [bookmarkOpen, setBookmarkOpen] = React.useState(false);
@@ -131,9 +137,24 @@ export function PdfReader({
     [highlights, activeHlId],
   );
 
+  /** Scroll the given page to the top of the viewport (instant or smooth). */
+  const scrollToPage = React.useCallback((p: number, smooth = true) => {
+    const scroller = scrollRef.current;
+    const el = pageRefs.current.get(p);
+    if (!scroller || !el) return;
+    const elTop =
+      el.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top +
+      scroller.scrollTop;
+    scroller.scrollTo({ top: Math.max(0, elTop - 8), behavior: smooth ? 'smooth' : 'auto' });
+  }, []);
+
+  const navigatingRef = React.useRef(false);
+
   // Sync the note draft when the active highlight changes.
   React.useEffect(() => {
-    setNoteDraft(activeHl?.note ?? '');
+    const timer = window.setTimeout(() => setNoteDraft(activeHl?.note ?? ''), 0);
+    return () => window.clearTimeout(timer);
   }, [activeHl]);
 
   const highlightsByPage = React.useMemo(() => {
@@ -186,6 +207,13 @@ export function PdfReader({
     return () => window.removeEventListener('resize', onResize);
   }, [fitWidth]);
 
+  // A new signed URL means a new document. Prevent an in-flight search for the
+  // previous document from publishing stale matches into the new reader.
+  React.useEffect(() => {
+    pdfRef.current = null;
+    searchRunRef.current += 1;
+  }, [url]);
+
   // Fullscreen change tracking
   React.useEffect(() => {
     const onFs = () =>
@@ -205,8 +233,11 @@ export function PdfReader({
       onProgress(page, Math.min(100, Math.round((page / numPages) * 100)));
     }
     if (pendingActiveId !== null) {
-      setActiveHlId(pendingActiveId);
-      setPendingActiveId(null);
+      const pendingId = pendingActiveId;
+      window.setTimeout(() => {
+        setActiveHlId(pendingId);
+        setPendingActiveId(null);
+      }, 0);
     }
     if (navigatingRef.current) {
       navigatingRef.current = false;
@@ -221,32 +252,19 @@ export function PdfReader({
     if (numPages === 0 || didInit.current) return;
     didInit.current = true;
     const target = Math.max(1, Math.min(numPages, initialPage));
-    setPage(target);
-    requestAnimationFrame(() => scrollToPage(target, false));
+    const frame = requestAnimationFrame(() => {
+      setPage(target);
+      scrollToPage(target, false);
+    });
+    return () => cancelAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [numPages]);
 
-  const onDocLoad = (pdf: { numPages: number }) => {
+  const onDocLoad = (pdf: PDFDocumentProxy) => {
+    pdfRef.current = pdf;
     setNumPages(pdf.numPages);
     setLoadError(null);
   };
-
-  /** Scroll the given page to the top of the viewport (instant or smooth). */
-  const scrollToPage = (p: number, smooth = true) => {
-    const scroller = scrollRef.current;
-    const el = pageRefs.current.get(p);
-    if (!scroller || !el) return;
-    const elTop =
-      el.getBoundingClientRect().top -
-      scroller.getBoundingClientRect().top +
-      scroller.scrollTop;
-    scroller.scrollTo({ top: Math.max(0, elTop - 8), behavior: smooth ? 'smooth' : 'auto' });
-  };
-
-  // Set when a page change was caused by explicit navigation (goTo / panel /
-  // init) rather than by the user scrolling, so the page-change effect can
-  // scroll the freshly-mounted page into view without fighting the user.
-  const navigatingRef = React.useRef(false);
 
   const goTo = (p: number) => {
     if (numPages === 0) return;
@@ -261,14 +279,26 @@ export function PdfReader({
     if (!scroller || numPages === 0) return;
     const scrollerTop = scroller.getBoundingClientRect().top;
     const scrollPos = scroller.scrollTop;
+    // Page wrappers remain in the scroll flow for stable positions, but use a
+    // binary search instead of walking every page on every scroll event.
     let current = 1;
-    for (let p = 1; p <= numPages; p++) {
+    let low = 1;
+    let high = numPages;
+    while (low <= high) {
+      const p = Math.floor((low + high) / 2);
       const el = pageRefs.current.get(p);
-      if (!el) continue;
+      if (!el) {
+        low = p + 1;
+        continue;
+      }
       const elTop =
         el.getBoundingClientRect().top - scrollerTop + scrollPos;
-      if (elTop <= scrollPos + 80) current = p;
-      else break;
+      if (elTop <= scrollPos + 80) {
+        current = p;
+        low = p + 1;
+      } else {
+        high = p - 1;
+      }
     }
     setPage((prev) => {
       if (prev === current) return prev;
@@ -289,39 +319,37 @@ export function PdfReader({
   const runSearch = async (term: string) => {
     const q = term.trim();
     if (!q) {
+      searchRunRef.current += 1;
       setMatchPages([]);
+      setSearching(false);
       return;
     }
-    if (numPages === 0) return;
+    const pdf = pdfRef.current;
+    if (!pdf || numPages === 0) return;
+    
+    const runId = ++searchRunRef.current;
     setSearching(true);
+    
     try {
-      const loadingTask = pdfjs.getDocument(url);
-      const pdf = await loadingTask.promise;
-      const found: number[] = [];
-      const needle = q.toLowerCase();
-      const limit = Math.min(numPages, 200);
-      for (let i = 1; i <= limit; i++) {
-        const pageProxy = await pdf.getPage(i);
-        const content = await pageProxy.getTextContent();
-        const text = content.items
-          .map((it) => ('str' in it ? it.str : ''))
-          .join(' ')
-          .toLowerCase();
-        if (text.includes(needle)) found.push(i);
-      }
-      await pdf.destroy();
+      // Backend search is much faster and doesn't block the UI thread!
+      const data = await resourcesApi.searchDocument(resourceId, q);
+      if (runId !== searchRunRef.current) return;
+      
+      const found = data?.pages || [];
       setMatchPages(found);
       setMatchIdx(0);
+      
       if (found.length) {
         goTo(found[0]);
         toast.success(`${found.length} match${found.length === 1 ? '' : 'es'} found`);
       } else {
         toast.error('No matches in this document');
       }
-    } catch {
-      toast.error('Search failed');
+    } catch (err) {
+      console.error("Search error:", err);
+      if (runId === searchRunRef.current) toast.error('Search failed');
     } finally {
-      setSearching(false);
+      if (runId === searchRunRef.current) setSearching(false);
     }
   };
 
@@ -373,7 +401,6 @@ export function PdfReader({
         span.style.background = '';
         span.style.color = '';
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   // ----- Highlight creation: capture the current text selection -----
@@ -454,9 +481,8 @@ export function PdfReader({
     const start = Math.max(1, page - 1);
     const end = Math.min(numPages, page + RENDER_WINDOW);
     for (let p = start; p <= end; p++) set.add(p);
-    for (const h of highlights) set.add(h.page);
     return set;
-  }, [page, numPages, highlights]);
+  }, [page, numPages]);
 
   return (
     <div
@@ -759,7 +785,13 @@ export function PdfReader({
                   else pageRefs.current.delete(p);
                 }}
                 className="relative shadow-lg shadow-black/30"
-                style={{ width: pw }}
+                style={{
+                  width: pw,
+                  // Let the browser skip layout/paint work for distant pages;
+                  // the placeholder height keeps scroll positions stable.
+                  contentVisibility: 'auto',
+                  containIntrinsicSize: `${ph}px`,
+                }}
               >
                 {loadError ? (
                   <div className="flex h-96 w-[600px] items-center justify-center p-8 text-center">

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { StickyNote, Plus, Search } from 'lucide-react';
+import { StickyNote, Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { NoteCard } from '@/features/notes/components/note-card';
 import { NoteSummary } from '@/features/notes/components/note-summary';
 import { useNoteList, useNoteSummary } from '@/features/notes/hooks/use-notes';
@@ -26,20 +26,26 @@ const PAGE_SIZE = 12;
 export default function NotesPage() {
   const { openCreate } = useCreate();
   const [search, setSearch] = React.useState('');
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
   const [status, setStatus] = React.useState<NoteStatus | 'all'>('all');
   const [priority, setPriority] = React.useState<NotePriority | 'all'>('all');
   const [page, setPage] = React.useState(1);
 
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   const { data: summary } = useNoteSummary();
   const query = React.useMemo(
     () => ({
-      search: search || undefined,
+      search: debouncedSearch || undefined,
       status: status === 'all' ? undefined : status,
       priority: priority === 'all' ? undefined : priority,
       page,
       limit: PAGE_SIZE,
     }),
-    [search, status, priority, page],
+    [debouncedSearch, status, priority, page],
   );
   const { data, isLoading, isError, error, refetch } = useNoteList(query);
 
@@ -114,11 +120,11 @@ export default function NotesPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-44 w-full" />
           ))}
-        </div>
+          </div>
       ) : isError ? (
         <EmptyState
           icon={<StickyNote className="h-6 w-6" />}
@@ -134,11 +140,24 @@ export default function NotesPage() {
           action={{ label: 'Add Note', onClick: () => openCreate('note') }}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {data?.items.map((n) => (
-            <NoteCard key={n.id} note={n} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {data?.items.map((n) => (
+              <NoteCard key={n.id} note={n} />
+            ))}
+          </div>
+          {(data?.totalPages ?? 1) > 1 && (
+            <div className="flex items-center justify-center gap-4 pt-2">
+              <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                <ChevronLeft className="h-4 w-4" /> Prev
+              </Button>
+              <span className="mono-label text-[11px] text-fg-secondary">PAGE {page} / {data?.totalPages}</span>
+              <Button variant="secondary" size="sm" disabled={page >= (data?.totalPages ?? 1)} onClick={() => setPage((p) => Math.min(data?.totalPages ?? p, p + 1))}>
+                Next <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

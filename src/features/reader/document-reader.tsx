@@ -6,8 +6,9 @@ import { PdfReader } from './pdf-reader';
 import { DocReader } from './doc-reader';
 import { Button } from '@/components/ui/button';
 import { useResourceFileUrl, useUpdateProgress, useAddBookmark, useRemoveBookmark, useAddHighlight, useUpdateHighlight, useRemoveHighlight } from '@/features/resources/hooks/use-resources';
-import { DOCUMENT_TYPES, isDocumentType } from '@/lib/constants';
 import type { Resource } from '@/lib/types';
+import { safeExternalUrl } from '@/lib/safe-content';
+import { ApiClientError } from '@/lib/api/client';
 
 /**
  * Integrated document reader entry point.
@@ -20,7 +21,7 @@ import type { Resource } from '@/lib/types';
  */
 export function DocumentReader({ resource }: { resource: Resource }) {
   const hasFile = Boolean(resource.filePath);
-  const { data: fileData, isLoading: fileLoading } = useResourceFileUrl(
+  const { data: fileData, isLoading: fileLoading, isError: fileError, error: fileErrorDetails, refetch: retryFileUrl } = useResourceFileUrl(
     hasFile ? resource.id : undefined,
   );
   const updateProgress = useUpdateProgress();
@@ -32,8 +33,13 @@ export function DocumentReader({ resource }: { resource: Resource }) {
 
   // Debounced progress persistence.
   const debounceRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const pendingProgressRef = React.useRef<{
+    currentPage?: number;
+    readingProgress?: number;
+  } | null>(null);
   const persistProgress = React.useCallback(
     (currentPage?: number, readingProgress?: number) => {
+      pendingProgressRef.current = { currentPage, readingProgress };
       clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         updateProgress.mutate({
@@ -41,10 +47,22 @@ export function DocumentReader({ resource }: { resource: Resource }) {
           currentPage,
           readingProgress,
         });
+        pendingProgressRef.current = null;
       }, 1200);
     },
     [resource.id, updateProgress],
   );
+
+  React.useEffect(() => {
+    return () => {
+      clearTimeout(debounceRef.current);
+      const pending = pendingProgressRef.current;
+      if (pending) {
+        updateProgress.mutate({ id: resource.id, ...pending });
+        pendingProgressRef.current = null;
+      }
+    };
+  }, [resource.id, updateProgress]);
 
   if (!hasFile) {
     return <LinkPanel resource={resource} />;
@@ -60,12 +78,32 @@ export function DocumentReader({ resource }: { resource: Resource }) {
     );
   }
 
+  if (fileError) {
+    return (
+      <div className="flex h-[70vh] flex-col items-center justify-center gap-3 rounded-feature border border-danger/30 bg-canvas px-6 text-center">
+        <p className="font-sans text-sm text-danger">
+          {fileErrorDetails instanceof ApiClientError
+            ? fileErrorDetails.message
+            : 'Could not prepare the document reader.'}
+        </p>
+        <Button variant="secondary" size="sm" onClick={() => retryFileUrl()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   const url = fileData?.url;
   if (!url) {
     return <LinkPanel resource={resource} />;
   }
 
-  const isDoc = resource.type === 'DOC' || resource.type === 'DOCX';
+  // The upload's file type is authoritative. A DOCX can be attached to a
+  // Documentation/Research Paper resource and still needs the DOC reader.
+  const isDoc = /(?:msword|wordprocessingml\.document)/i.test(resource.fileType ?? '')
+    || /\.docx?$/i.test(resource.fileName ?? '')
+    || resource.type === 'DOC'
+    || resource.type === 'DOCX';
 
   if (isDoc) {
     return (
@@ -81,6 +119,7 @@ export function DocumentReader({ resource }: { resource: Resource }) {
   return (
     <div className="h-[78vh]">
       <PdfReader
+        resourceId={resource.id}
         url={url}
         initialPage={resource.currentPage ?? 1}
         bookmarks={resource.bookmarks ?? []}
@@ -120,9 +159,9 @@ function LinkPanel({ resource }: { resource: Resource }) {
           {resource.type}
         </p>
       </div>
-      {resource.link ? (
+      {safeExternalUrl(resource.link) ? (
         <Button asChild variant="primary">
-          <a href={resource.link} target="_blank" rel="noopener noreferrer">
+          <a href={safeExternalUrl(resource.link) ?? '#'} target="_blank" rel="noopener noreferrer">
             <ExternalLink className="h-4 w-4" />
             Open Resource
           </a>

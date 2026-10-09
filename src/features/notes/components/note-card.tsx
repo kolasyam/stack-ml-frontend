@@ -28,6 +28,7 @@ import { useCreate } from '@/components/layout/create-provider';
 import { useDeleteNote } from '../hooks/use-notes';
 import { formatShortDate, cn } from '@/lib/utils';
 import type { Note } from '@/lib/types';
+import { safeExternalUrl } from '@/lib/safe-content';
 
 export function NoteCard({ note }: { note: Note }) {
   const { openNote } = useCreate();
@@ -79,7 +80,7 @@ export function NoteCard({ note }: { note: Note }) {
                 <MoreVertical className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => openNote(note)}>
                 <Pencil className="h-4 w-4" /> Edit
@@ -106,28 +107,34 @@ export function NoteCard({ note }: { note: Note }) {
 
         {(note.attachments.length > 0 || note.links.length > 0) && (
           <div className="flex flex-wrap gap-1.5">
-            {note.attachments.slice(0, 3).map((a, i) => (
+            {note.attachments.slice(0, 3).map((a, i) => {
+              const href = safeExternalUrl(a);
+              return href ? (
               <a
                 key={`a-${i}`}
-                href={a}
+                href={href}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mono-label flex items-center gap-1 rounded-pill border border-fg/15 px-2 py-0.5 text-[10px] text-fg-secondary hover:border-mint/40"
               >
                 <Paperclip className="h-3 w-3" /> attach
               </a>
-            ))}
-            {note.links.slice(0, 3).map((l, i) => (
+              ) : null;
+            })}
+            {note.links.slice(0, 3).map((l, i) => {
+              const href = safeExternalUrl(l);
+              return href ? (
               <a
                 key={`l-${i}`}
-                href={l}
+                href={href}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mono-label flex items-center gap-1 rounded-pill border border-fg/15 px-2 py-0.5 text-[10px] text-mint hover:border-mint/40"
               >
                 <Link2 className="h-3 w-3" /> link
               </a>
-            ))}
+              ) : null;
+            })}
           </div>
         )}
 

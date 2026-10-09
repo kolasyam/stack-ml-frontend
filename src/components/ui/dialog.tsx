@@ -45,6 +45,7 @@ export const DialogContent = React.forwardRef<
         'data-[state=open]:animate-fade-in',
         className,
       )}
+      onClick={(e) => e.stopPropagation()}
       {...props}
     >
       {children}

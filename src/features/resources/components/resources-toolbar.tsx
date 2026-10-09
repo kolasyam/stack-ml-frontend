@@ -53,6 +53,22 @@ export function ResourcesToolbar({
   loading,
 }: Props) {
   const [sheetOpen, setSheetOpen] = React.useState(false);
+  const [searchInput, setSearchInput] = React.useState(filters.search ?? '');
+  const searchTimer = React.useRef<ReturnType<typeof setTimeout>>();
+
+  React.useEffect(() => () => clearTimeout(searchTimer.current), []);
+
+  const onSearchChange = (value: string) => {
+    setSearchInput(value);
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => onChange({ search: value || undefined }), 250);
+  };
+
+  const clearSearch = () => {
+    setSearchInput('');
+    clearTimeout(searchTimer.current);
+    onChange({ search: undefined });
+  };
   const activeCount =
     (filters.type ? 1 : 0) +
     (filters.priority ? 1 : 0) +
@@ -131,9 +147,10 @@ export function ResourcesToolbar({
       <Button
         variant="ghost"
         className="self-start"
-        onClick={() =>
-          onChange({ type: undefined, priority: undefined, status: undefined, favorite: false })
-        }
+        onClick={() => {
+          clearSearch();
+          onChange({ type: undefined, priority: undefined, status: undefined, favorite: undefined });
+        }}
       >
         <X className="h-4 w-4" /> Clear filters
       </Button>
@@ -146,8 +163,8 @@ export function ResourcesToolbar({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-secondary" />
           <Input
-            value={filters.search ?? ''}
-            onChange={(e) => onChange({ search: e.target.value })}
+            value={searchInput}
+            onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search resources…"
             className="pl-9"
           />
@@ -271,14 +288,15 @@ export function ResourcesToolbar({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() =>
+            onClick={() => {
+              clearSearch();
               onChange({
                 type: undefined,
                 priority: undefined,
                 status: undefined,
-                favorite: false,
-              })
-            }
+                favorite: undefined,
+              });
+            }}
           >
             <X className="h-3.5 w-3.5" /> Clear
           </Button>

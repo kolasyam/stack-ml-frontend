@@ -32,14 +32,14 @@ import type { CreateNoteInput, UpdateNoteInput } from '@/lib/api/notes';
 import type { Note } from '@/lib/types';
 
 const schema = z.object({
-  taskName: z.string().min(1, 'Task name is required'),
-  taskDescription: z.string().optional(),
+  taskName: z.string().min(1, 'Task name is required').max(200),
+  taskDescription: z.string().max(10000).optional(),
   priority: z.enum(NOTE_PRIORITIES as [string, ...string[]]).optional(),
   status: z.enum(NOTE_STATUSES as [string, ...string[]]).optional(),
-  assignedBy: z.string().optional(),
-  projectName: z.string().optional(),
-  attachments: z.array(z.string()).optional(),
-  links: z.array(z.string()).optional(),
+  assignedBy: z.string().max(200).optional(),
+  projectName: z.string().max(200).optional(),
+  attachments: z.array(z.string().url().max(2048).refine((v) => /^https?:\/\//i.test(v), 'Use an HTTP(S) URL')).max(20).optional(),
+  links: z.array(z.string().url().max(2048).refine((v) => /^https?:\/\//i.test(v), 'Use an HTTP(S) URL')).max(20).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;

@@ -1,5 +1,6 @@
 import { api } from './client';
 import { buildQuery } from '../utils';
+import type { UploadOptions } from './client';
 import type {
   Bookmark,
   Highlight,
@@ -31,13 +32,8 @@ export interface CreateResourceInput {
   description?: string;
   type: ResourceType;
   link?: string;
-  fileUrl?: string;
+  links?: string[];
   filePath?: string;
-  fileName?: string;
-  fileSize?: number;
-  fileType?: string;
-  pages?: number;
-  extractedText?: string;
   tags?: string[];
   difficulty?: ResourceDifficulty;
   priority?: ResourcePriority;
@@ -57,10 +53,10 @@ export const resourcesApi = {
   list: (q: ResourceQuery = {}, signal?: AbortSignal) =>
     api.get<Paginated<Resource>>('/resources', buildQuery(q as Record<string, unknown>), signal),
 
-  get: (id: string) => api.get<Resource>(`/resources/${id}`),
+  get: (id: string, signal?: AbortSignal) => api.get<Resource>(`/resources/${id}`, undefined, signal),
 
-  fileUrl: (id: string) =>
-    api.get<{ url: string }>(`/resources/${id}/file-url`),
+  fileUrl: (id: string, download = false, signal?: AbortSignal) =>
+    api.get<{ url: string }>(`/resources/${id}/file-url`, buildQuery(download ? { download: 'true' } : {}), signal),
 
   create: (input: CreateResourceInput) =>
     api.post<Resource>('/resources', input),
@@ -69,7 +65,7 @@ export const resourcesApi = {
     api.patch<Resource>(`/resources/${id}`, input),
 
   progress: (id: string, input: ProgressInput) =>
-    api.patch<Resource>(`/resources/${id}/progress`, input),
+    api.patch<{ id: string }>(`/resources/${id}/progress`, input),
 
   toggleFavorite: (id: string) =>
     api.patch<Resource>(`/resources/${id}/favorite`),
@@ -88,6 +84,9 @@ export const resourcesApi = {
 
   removeHighlight: (id: string, highlightId: string) =>
     api.delete<Resource>(`/resources/${id}/highlights/${highlightId}`),
+
+  searchDocument: (id: string, q: string) =>
+    api.get<{ pages: number[] }>(`/resources/${id}/search?q=${encodeURIComponent(q)}`),
 
   remove: (id: string) => api.delete<{ deleted: true }>(`/resources/${id}`),
 };
@@ -108,14 +107,11 @@ export interface UpdateHighlightInput {
 export type { Highlight };
 
 export const uploadsApi = {
-  upload: (file: File) => {
+  upload: (file: File, options?: UploadOptions) => {
     const form = new FormData();
     form.append('file', file);
-    return api.upload<UploadResult>('/uploads', form);
+    return api.upload<UploadResult>('/uploads', form, options);
   },
-  signedUrl: (path: string, download = false) =>
-    api.get<{ url: string; path: string }>(
-      '/uploads/signed-url',
-      buildQuery({ path, download: download ? 'true' : undefined }),
-    ),
+  remove: (path: string) =>
+    api.delete<{ deleted: true }>('/uploads', { path }),
 };

@@ -33,6 +33,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${fontDisplay.variable} ${fontSans.variable} ${fontMono.variable} font-sans`}
+        suppressHydrationWarning
       >
         {/* Pre-hydration guard: browser extensions (e.g. Grammarly) inject
             attributes such as `fdprocessedid` / `data-gramm*` into inputs and

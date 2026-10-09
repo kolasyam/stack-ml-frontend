@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { CheckSquare, BookOpen, Plus, Search } from 'lucide-react';
+import { CheckSquare, BookOpen, Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { TodoCard } from '@/features/todos/components/todo-card';
 import { TodoSummary } from '@/features/todos/components/todo-summary';
 import { useTodoList, useTodoSummary } from '@/features/todos/hooks/use-todos';
@@ -31,21 +31,27 @@ const PAGE_SIZE = 12;
 export default function TodosPage() {
   const { openCreate } = useCreate();
   const [search, setSearch] = React.useState('');
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
   const [status, setStatus] = React.useState<TodoStatus | 'all'>('all');
   const [priority, setPriority] = React.useState<ResourcePriority | 'all'>('all');
   const [page, setPage] = React.useState(1);
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   const { data: summary } = useTodoSummary();
   const { data: resourcesCheck } = useResourceList({ limit: 1 });
   const query = React.useMemo(
     () => ({
-      search: search || undefined,
+      search: debouncedSearch || undefined,
       status: status === 'all' ? undefined : status,
       priority: priority === 'all' ? undefined : priority,
       page,
       limit: PAGE_SIZE,
     }),
-    [search, status, priority, page],
+    [debouncedSearch, status, priority, page],
   );
   const { data, isLoading, isError, error, refetch } = useTodoList(query);
 
@@ -164,6 +170,17 @@ export default function TodosPage() {
               <TodoCard key={t.id} todo={t} />
             ))}
           </div>
+          {(data?.totalPages ?? 1) > 1 && (
+            <div className="flex items-center justify-center gap-4 pt-2">
+              <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                <ChevronLeft className="h-4 w-4" /> Prev
+              </Button>
+              <span className="mono-label text-[11px] text-fg-secondary">PAGE {page} / {data?.totalPages}</span>
+              <Button variant="secondary" size="sm" disabled={page >= (data?.totalPages ?? 1)} onClick={() => setPage((p) => Math.min(data?.totalPages ?? p, p + 1))}>
+                Next <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>
