@@ -87,87 +87,97 @@ export default function DashboardPage() {
 
           <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
             {/* Current reading */}
-            <CurrentReading
-              resource={data.currentReading}
-              onOpen={(id) => router.push(`/resources/${id}`)}
-              onContinue={() => data.currentReading && router.push(`/resources/${data.currentReading.id}`)}
-            />
+            <div className="min-w-0">
+              <CurrentReading
+                resource={data.currentReading}
+                onOpen={(id) => router.push(`/resources/${id}`)}
+                onContinue={() => data.currentReading && router.push(`/resources/${data.currentReading.id}`)}
+              />
+            </div>
 
             {/* Continue reading quick action + completion */}
-            <Card className="flex flex-col justify-between gap-4 p-5">
-              <div>
-                <p className="mono-label text-[10px] text-fg-secondary">QUICK ACTIONS</p>
-                <div className="mt-3 flex flex-col gap-2">
-                  <QuickAction icon={<BookOpen className="h-4 w-4 text-mint" />} label="Add Resource" onClick={() => openCreate('resource')} />
-                  <QuickAction icon={<CheckSquare className="h-4 w-4 text-mint" />} label="Add Todo" onClick={() => openCreate('todo')} />
-                  <QuickAction icon={<StickyNote className="h-4 w-4 text-mint" />} label="Add Note" onClick={() => openCreate('note')} />
+            <div className="min-w-0">
+              <Card className="flex h-full flex-col justify-between gap-4 p-5">
+                <div>
+                  <p className="mono-label text-[10px] text-fg-secondary">QUICK ACTIONS</p>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <QuickAction icon={<BookOpen className="h-4 w-4 text-mint" />} label="Add Resource" onClick={() => openCreate('resource')} />
+                    <QuickAction icon={<CheckSquare className="h-4 w-4 text-mint" />} label="Add Todo" onClick={() => openCreate('todo')} />
+                    <QuickAction icon={<StickyNote className="h-4 w-4 text-mint" />} label="Add Note" onClick={() => openCreate('note')} />
+                  </div>
                 </div>
-              </div>
-              <div className="rounded-card border border-fg/10 bg-canvas/40 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="mono-label text-[10px] text-fg-secondary">LEARNING PROGRESS</span>
-                  <span className="font-sans text-sm font-semibold text-fg">{data.todos.completionPct}%</span>
+                <div className="rounded-card border border-fg/10 bg-canvas/40 p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="mono-label text-[10px] text-fg-secondary">LEARNING PROGRESS</span>
+                    <span className="font-sans text-sm font-semibold text-fg">{data.todos.completionPct}%</span>
+                  </div>
+                  <Progress value={data.todos.completionPct} className="mt-2" />
                 </div>
-                <Progress value={data.todos.completionPct} className="mt-2" />
-              </div>
-            </Card>
+              </Card>
+            </div>
           </div>
 
           {/* Recent items */}
           <div className="grid gap-5 lg:grid-cols-3">
-            <RecentColumn
-              title="Recent Uploads"
-              href="/resources"
-              items={data.recentResources.map((r) => ({
-                id: r.id,
-                primary: r.title,
-                secondary: r.type,
-                icon: <ResourceTypeIcon type={r.type} className="h-4 w-4" />,
-                meta: formatShortDate(r.createdAt),
-                status: (
-                  <Badge tone="neutral" className={cn('py-0.5', RESOURCE_STATUS_STYLES[r.status])}>
-                    {r.status}
-                  </Badge>
-                ),
-              }))}
-            />
-            <RecentColumn
-              title="Recent Todos"
-              href="/todos"
-              items={data.recentTodos.map((t) => {
-                const res = typeof t.resourceId === 'object' ? t.resourceId : null;
-                return {
-                  id: t.id,
-                  to: '/todos',
-                  primary: t.title,
-                  secondary: res?.title ?? 'Linked resource',
-                  icon: <CheckSquare className="h-4 w-4 text-mint" />,
-                  meta: formatShortDate(t.createdAt),
+            <div className="min-w-0">
+              <RecentColumn
+                title="Recent Uploads"
+                href="/resources"
+                items={data.recentResources.map((r) => ({
+                  id: r.id,
+                  primary: r.title,
+                  secondary: r.type,
+                  icon: <ResourceTypeIcon type={r.type} className="h-4 w-4" />,
+                  meta: formatShortDate(r.createdAt),
                   status: (
-                    <Badge tone="neutral" className={cn('py-0.5', TODO_STATUS_STYLES[t.status])}>
-                      {t.status}
+                    <Badge tone="neutral" className={cn('py-0.5', RESOURCE_STATUS_STYLES[r.status])}>
+                      {r.status}
                     </Badge>
                   ),
-                };
-              })}
-            />
-            <RecentColumn
-              title="Recent Notes"
-              href="/notes"
-              items={data.recentNotes.map((n) => ({
-                id: n.id,
-                to: '/notes',
-                primary: n.taskName,
-                secondary: n.projectName ?? n.status,
-                icon: <StickyNote className="h-4 w-4 text-mint" />,
-                meta: relativeTime(n.createdAt),
-                status: (
-                  <Badge tone="neutral" className={cn('py-0.5', NOTE_STATUS_STYLES[n.status])}>
-                    {n.status}
-                  </Badge>
-                ),
-              }))}
-            />
+                }))}
+              />
+            </div>
+            <div className="min-w-0">
+              <RecentColumn
+                title="Recent Todos"
+                href="/todos"
+                items={data.recentTodos.map((t) => {
+                  const res = typeof t.resourceId === 'object' ? t.resourceId : null;
+                  return {
+                    id: t.id,
+                    to: '/todos',
+                    primary: t.title,
+                    secondary: res?.title ?? 'Linked resource',
+                    icon: <CheckSquare className="h-4 w-4 text-mint" />,
+                    meta: formatShortDate(t.createdAt),
+                    status: (
+                      <Badge tone="neutral" className={cn('py-0.5', TODO_STATUS_STYLES[t.status])}>
+                        {t.status}
+                      </Badge>
+                    ),
+                  };
+                })}
+              />
+            </div>
+            <div className="min-w-0">
+              <RecentColumn
+                title="Recent Notes"
+                href="/notes"
+                items={data.recentNotes.map((n) => ({
+                  id: n.id,
+                  to: '/notes',
+                  primary: n.taskName,
+                  secondary: n.projectName ?? n.status,
+                  icon: <StickyNote className="h-4 w-4 text-mint" />,
+                  meta: relativeTime(n.createdAt),
+                  status: (
+                    <Badge tone="neutral" className={cn('py-0.5', NOTE_STATUS_STYLES[n.status])}>
+                      {n.status}
+                    </Badge>
+                  ),
+                }))}
+              />
+            </div>
           </div>
         </>
       ) : null}
