@@ -176,7 +176,7 @@ export function CommandPalette({
                         <span className="truncate font-sans text-sm text-fg">
                           {item.title}
                         </span>
-                        {item.kind !== 'action' && item.highlights?.[0]?.texts && (
+                        {item.highlights?.[0]?.texts && (
                           <span className="truncate font-sans text-xs text-fg-secondary">
                             {item.highlights[0].texts.map((t, idx) => (
                               <span key={idx} className={t.type === 'hit' ? 'bg-mint/20 text-mint' : ''}>
